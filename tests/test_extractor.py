@@ -1,10 +1,13 @@
 from src.extractor import (
+    extract_after_colon,
     extract_booleans,
     extract_file_path,
     extract_last_word,
     extract_numbers,
     extract_quoted_strings,
+    extract_word_before_keyword,
     generate_regex_candidates,
+    generate_replacement_candidates,
 )
 
 
@@ -51,3 +54,31 @@ def test_generate_regex_candidates_from_neutral_hints() -> None:
         r"[0-9]+",
     ]
     assert r"[aeiouAEIOU]" in generate_regex_candidates("match vowels")
+
+
+def test_generate_replacement_candidates_for_symbolic_words() -> None:
+    """Replacement hints convert natural-language words into symbols."""
+    assert generate_replacement_candidates("replace with asterisks") == ["*"]
+    assert generate_replacement_candidates("replace with empty value") == [""]
+
+
+def test_extract_word_before_keyword() -> None:
+    """Words before a keyword are extracted for role-specific candidates."""
+    assert extract_word_before_keyword(
+        "Execute query on the production database",
+        "database",
+    ) == ["production"]
+
+    assert extract_word_before_keyword(
+        "Read file with utf-8 encoding",
+        "encoding",
+    ) == ["utf-8"]
+
+
+def test_extract_after_colon() -> None:
+    """Text after a colon is extracted as one full candidate."""
+    assert extract_after_colon(
+        "Format template: Hello {user}'s profile!"
+    ) == "Hello {user}'s profile!"
+
+    assert extract_after_colon("No colon here") is None
