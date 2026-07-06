@@ -1,8 +1,6 @@
 import re
 
-
 NumberValue = int | float
-
 
 _NUMBER_RE = re.compile(r"[-+]?\d+(?:\.\d+)?")
 _QUOTED_STRING_RE = re.compile(r"'([^']*)'|\"([^\"]*)\"")
@@ -10,32 +8,17 @@ _QUOTED_STRING_RE = re.compile(r"'([^']*)'|\"([^\"]*)\"")
 
 def extract_numbers(text: str) -> list[NumberValue]:
     """Extract integer and float literals from text."""
-    values: list[NumberValue] = []
-
-    for match in _NUMBER_RE.finditer(text):
-        raw_value = match.group(0)
-
-        if "." in raw_value:
-            values.append(float(raw_value))
-        else:
-            values.append(int(raw_value))
-
-    return values
+    return [
+        float(val) if "." in val else int(val)
+        for val in _NUMBER_RE.findall(text)
+    ]
 
 
 def extract_quoted_strings(text: str) -> list[str]:
     """Extract single-quoted and double-quoted strings from text."""
     values: list[str] = []
-
     for match in _QUOTED_STRING_RE.finditer(text):
-        single_quoted = match.group(1)
-        double_quoted = match.group(2)
-
-        if single_quoted is not None:
-            values.append(single_quoted)
-        elif double_quoted is not None:
-            values.append(double_quoted)
-
+        values.append(match.group(1) or match.group(2))
     return values
 
 
@@ -43,115 +26,18 @@ def extract_booleans(text: str) -> list[bool]:
     """Extract obvious boolean values from text."""
     lowered_words = re.findall(r"\b[a-zA-Z]+\b", text.lower())
     values: list[bool] = []
-
     for word in lowered_words:
         if word in {"true", "yes", "enable", "enabled", "on"}:
             values.append(True)
         elif word in {"false", "no", "disable", "disabled", "off"}:
             values.append(False)
-
     return values
 
 
 def extract_last_word(text: str) -> str | None:
     """Extract the last simple word from text."""
-    words: list[str] = re.findall(r"\b[A-Za-z][A-Za-z0-9_-]*\b", text)
-
-    if not words:
-        return None
-
-    return words[-1]
-
-
-def extract_replacement_word(text: str) -> str | None:
-    """Extract a likely replacement word from substitution-style prompts."""
-    patterns = [
-        r"\bwith\s+(asterisks|dash|underscore|space)\b",
-        r"\bwith\s+([A-Za-z0-9_*.-]+)\b",
-    ]
-
-    for pattern in patterns:
-        match = re.search(pattern, text, flags=re.IGNORECASE)
-
-        if match:
-            value = match.group(1)
-            lowered_value = value.lower()
-
-            if lowered_value == "asterisks":
-                return "*"
-            if lowered_value == "dash":
-                return "-"
-            if lowered_value == "underscore":
-                return "_"
-            if lowered_value == "space":
-                return " "
-
-            return value
-
-    return None
-
-
-def extract_regex_pattern(text: str) -> str | None:
-    """Extract an obvious regex pattern from a substitution-style prompt."""
-    lowered = text.lower()
-
-    if "all numbers" in lowered or "digits" in lowered:
-        return r"\d+"
-
-    if "all vowels" in lowered or "vowels" in lowered:
-        return r"[aeiouAEIOU]"
-
-    return None
-
-
-def extract_substitution_source(text: str) -> str | None:
-    """Extract source string from substitution-style prompts."""
-    quoted = extract_quoted_strings(text)
-
-    if len(quoted) >= 3 and re.search(r"\bin\b", text, flags=re.IGNORECASE):
-        return quoted[-1]
-
-    if quoted:
-        return quoted[0]
-
-    return None
-
-
-def extract_substitution_target(text: str) -> str | None:
-    """Extract target regex from substitution-style prompts."""
-    quoted = extract_quoted_strings(text)
-    lowered = text.lower()
-
-    if "substitute" in lowered and quoted:
-        return rf"\b{re.escape(quoted[0])}\b"
-
-    return None
-
-
-def extract_substitution_replacement(text: str) -> str | None:
-    """Extract replacement value from substitution-style prompts."""
-    quoted = extract_quoted_strings(text)
-    lowered = text.lower()
-
-    if "substitute" in lowered and len(quoted) >= 2:
-        return quoted[1]
-
-    return extract_replacement_word(text)
-
-
-def extract_database_name(text: str) -> str | None:
-    """Extract database name from prompts like 'on the production database'."""
-    patterns = [
-        r"\bon\s+the\s+([A-Za-z0-9_-]+)\s+database\b",
-        r"\bon\s+([A-Za-z0-9_-]+)\s+database\b",
-    ]
-
-    for pattern in patterns:
-        match = re.search(pattern, text, flags=re.IGNORECASE)
-        if match:
-            return match.group(1)
-
-    return None
+    words = re.findall(r"\b[A-Za-z][A-Za-z0-9_-]*\b", text)
+    return words[-1] if words else None
 
 
 def extract_file_path(text: str) -> str | None:
@@ -159,37 +45,51 @@ def extract_file_path(text: str) -> str | None:
     unix_match = re.search(r"(/[^\s]+)", text)
     if unix_match:
         return unix_match.group(1)
-
     windows_match = re.search(r"([A-Za-z]:\\[^\s]+)", text)
-    if windows_match:
-        return windows_match.group(1)
-
-    return None
+    return windows_match.group(1) if windows_match else None
 
 
-def extract_encoding(text: str) -> str | None:
-    """Extract encoding from prompts like 'with utf-8 encoding'."""
-    match = re.search(
-        r"\bwith\s+([A-Za-z0-9_-]+)\s+encoding\b",
-        text,
-        flags=re.IGNORECASE,
-    )
+def generate_regex_candidates(text: str) -> list[str]:
+    """Generate potential regex candidates based on semantic hints in text."""
+    candidates = []
+    lowered = text.lower()
+    if "number" in lowered or "digit" in lowered:
+        candidates.extend([r"\d+", r"[0-9]+"])
+    if "vowel" in lowered:
+        candidates.extend([r"[aeiouAEIOU]", r"[aeiou]"])
+    if "word" in lowered and "'" in text:
+        # If the prompt mentions "word" and contains a quoted string,
+        # use that quoted string as a regex candidate.
+        words = extract_quoted_strings(text)
+        if words:
+            candidates.append(rf"\b{re.escape(words[0])}\b")
+    return candidates
 
-    if match:
-        return match.group(1)
 
-    return None
+def generate_replacement_candidates(text: str) -> list[str]:
+    """Generate symbolic replacement candidates from natural language."""
+    lowered = text.lower()
+    candidates: list[str] = []
+
+    if "asterisk" in lowered or "asterisks" in lowered:
+        candidates.append("*")
+    if "space" in lowered:
+        candidates.append(" ")
+    if "empty" in lowered or "nothing" in lowered:
+        candidates.append("")
+
+    return candidates
 
 
-def extract_template(text: str) -> str | None:
-    """Extract template after 'Format template:'."""
-    match = re.search(
-        r"\bFormat\s+template:\s*(.+)$",
-        text,
-        flags=re.IGNORECASE,
-    )
+def extract_word_before_keyword(text: str, keyword: str) -> list[str]:
+    """Extract words placed directly before a given keyword."""
+    pattern = rf"\b([A-Za-z0-9_-]+)\s+{re.escape(keyword)}\b"
+    return re.findall(pattern, text, flags=re.IGNORECASE)
 
-    if match:
-        return match.group(1).strip()
 
-    return None
+def extract_after_colon(text: str) -> str | None:
+    """Extract text after the first colon."""
+    if ":" not in text:
+        return None
+    value = text.split(":", 1)[1].strip()
+    return value if value else None
