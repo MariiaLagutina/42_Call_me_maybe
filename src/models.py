@@ -1,5 +1,3 @@
-"""Pydantic models for input and output validation."""
-
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
