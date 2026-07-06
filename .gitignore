@@ -21,8 +21,7 @@ htmlcov/
 .env
 .env.*
 
-data/output/*.json
-!data/output/.gitkeep
+data/output/
 
 .cache/
 
