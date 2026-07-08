@@ -134,9 +134,11 @@ Example prompt file:
 
 ```json
 [
-  "What is the sum of 2 and 3?",
   {
-    "prompt": "Greet Alice"
+    "prompt": "What is the square root of 16?"
+  },
+  {
+    "prompt": "Reverse the string 'hello'"
   }
 ]
 ```
