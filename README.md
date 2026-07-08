@@ -349,6 +349,23 @@ extras include:
 - Token-mask fallback decoding is limited to simple strings, numbers, integers,
   and booleans.
 
+## Performance Analysis
+
+- **Accuracy:** Function selection and argument decoding are constrained by the
+  available function definitions and validated schemas. The model is used to
+  score allowed function names and candidate argument values instead of freely
+  generating arbitrary JSON.
+
+- **Reliability:** The output JSON is assembled from structured Python objects
+  and validated with Pydantic before writing. This keeps the output parseable
+  and schema-compliant. For simple fallback values, token masks restrict
+  generation to safe string tokens, number-compatible tokens, or boolean values.
+
+- **Speed:** The implementation is designed for the small default model used in
+  the subject. It first scores explicit candidates extracted from the prompt and
+  only uses token-masked fallback decoding when needed, keeping the amount of
+  generation limited.
+
 ## Challenges Faced
 
 One challenge was balancing practical reliability with the constrained decoding
@@ -365,10 +382,11 @@ the source code interacts with the model only through the public SDK interface.
 Resources used:
 - provided llm_sdk
 - Hugging Face model page for Qwen/Qwen3-0.6B, used to understand the model referenced by the subject and llm_sdk
-- Python documentation for json, argparse, pathlib, and typing
+- Python documentation for `json`, `argparse`, `pathlib`, `re`, and typing
 - Pydantic documentation
 - pytest, flake8, and mypy documentation
 - Rich documentation for terminal tables
+- Regular Expressions in Python tutorial, used to review regex-based prompt value extraction
 
 
 ## AI usage
