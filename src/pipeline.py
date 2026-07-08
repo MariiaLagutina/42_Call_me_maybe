@@ -5,6 +5,7 @@ from pathlib import Path
 from llm_sdk import Small_LLM_Model
 
 from src.config import MIN_SELECTION_CONFIDENCE
+from src.constrained_value_decoder import ConstrainedValueDecoder
 from src.decoder import ArgumentDecoder
 from src.io_utils import (
     load_function_definitions,
@@ -61,7 +62,11 @@ class Pipeline:
         )
 
         scorer = CandidateScorer(model=model)
-        decoder = ArgumentDecoder(scorer=scorer)
+        value_decoder = ConstrainedValueDecoder.try_from_model(model)
+        decoder = ArgumentDecoder(
+            scorer=scorer,
+            value_decoder=value_decoder,
+        )
 
         results: list[FunctionCallResult] = []
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from src.candidate_scorer import CandidateScorer
+from src.constrained_value_decoder import ConstrainedValueDecoder
 from src.errors import DecodingError
 from src.extractor import (
     extract_booleans,
@@ -95,8 +96,13 @@ def _string_candidates_for_parameter(
 class ArgumentDecoder:
     """Decode function arguments using schema-guided candidate generation."""
 
-    def __init__(self, scorer: CandidateScorer) -> None:
+    def __init__(
+        self,
+        scorer: CandidateScorer,
+        value_decoder: ConstrainedValueDecoder | None = None,
+    ) -> None:
         self.scorer = scorer
+        self.value_decoder = value_decoder
 
     def decode_arguments(
         self,
@@ -133,19 +139,22 @@ class ArgumentDecoder:
                     f"Unsupported parameter type: {parameter.type}"
                 )
 
-            if not current_candidates:
-                raise DecodingError(
-                    "No candidate values found in prompt for "
-                    f"{parameter_name}"
+            if current_candidates:
+                best_value = self.scorer.choose(
+                    user_prompt=user_prompt,
+                    function_name=function.name,
+                    parameter_name=parameter_name,
+                    description=parameter.description or "No description",
+                    candidates=current_candidates,
                 )
-
-            best_value = self.scorer.choose(
-                user_prompt=user_prompt,
-                function_name=function.name,
-                parameter_name=parameter_name,
-                description=parameter.description or "No description",
-                candidates=current_candidates,
-            )
+            else:
+                best_value = self._decode_with_token_mask(
+                    user_prompt=user_prompt,
+                    function_name=function.name,
+                    parameter_name=parameter_name,
+                    description=parameter.description or "No description",
+                    parameter_type=parameter.type,
+                )
 
             if parameter.type in {"number", "integer"}:
                 if best_value in numbers:
@@ -164,3 +173,41 @@ class ArgumentDecoder:
             args[parameter_name] = best_value
 
         return args
+
+    def _decode_with_token_mask(
+        self,
+        user_prompt: str,
+        function_name: str,
+        parameter_name: str,
+        description: str,
+        parameter_type: str,
+    ) -> Any:
+        """Fallback to token-masked generation when extraction has no value."""
+        if self.value_decoder is None:
+            raise DecodingError(
+                "No candidate values found in prompt for "
+                f"{parameter_name}"
+            )
+
+        context = (
+            f"User request: {user_prompt}\n"
+            f"Function: {function_name}\n"
+            f"Parameter: {parameter_name} ({description})\n"
+            "JSON value: "
+        )
+
+        if parameter_type == "boolean":
+            return self.value_decoder.choose_boolean(context)
+
+        if parameter_type in {"number", "integer"}:
+            return self.value_decoder.generate_number(
+                context,
+                integer_only=(parameter_type == "integer"),
+            )
+
+        if parameter_type == "string":
+            return self.value_decoder.generate_string(context)
+
+        raise DecodingError(
+            f"Token-masked fallback does not support {parameter_type}"
+        )
