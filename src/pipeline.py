@@ -12,12 +12,10 @@ from src.io_utils import (
     load_test_prompts,
     write_results,
 )
-from src.errors import DecodingError, SelectionError
 from src.render import (
     print_function_call,
     print_output_saved,
     print_prompt_start,
-    print_unknown_prompt,
 )
 from src.models import FunctionCallResult
 from src.selector import FunctionSelector
@@ -73,12 +71,8 @@ class Pipeline:
         for index, prompt in enumerate(prompts, start=1):
             print_prompt_start(index, len(prompts), prompt)
 
-            try:
-                selected_function = selector.select(prompt, functions)
-                args = decoder.decode_arguments(prompt, selected_function)
-            except (SelectionError, DecodingError) as exc:
-                print_unknown_prompt(prompt, exc)
-                continue
+            selected_function = selector.select(prompt, functions)
+            args = decoder.decode_arguments(prompt, selected_function)
 
             print_function_call(selected_function.name, args)
 
